@@ -256,10 +256,43 @@ tbody tr:hover td{background:#F4FAF7}
   <button class="nav-tab active" onclick="switchTab('yesterday',this)">📆 Yesterday</button>
   <button class="nav-tab" onclick="switchTab('wtd',this)">📈 WTD</button>
   <button class="nav-tab" onclick="switchTab('mtd',this)">📊 MTD</button>
+  <button class="nav-tab" onclick="switchTab('skureview',this)">
+    🔍 SKU Review <span class="badge-pill" id="sku-review-count">—</span>
+  </button>
   <button class="nav-tab" onclick="switchTab('prohibited',this)">
     ⚠ Prohibited <span class="badge-pill" id="proh-count">—</span>
   </button>
 </nav>
+
+<!-- TAB: SKU REVIEW -->
+<div class="tab-section" id="tab-skureview">
+  <div class="section-toolbar">
+    <div>
+      <div style="font-size:13px;font-weight:600">SKU-level Add vs Remove Review</div>
+      <div style="font-size:11px;color:var(--c-text-3);margin-top:2px">
+        Only SKUs where Add ≠ Remove are shown · Balanced SKUs are excluded
+      </div>
+    </div>
+    <div class="filters-row">
+      <select id="f-period-sku" onchange="loadSkuReview()">
+        <option value="yesterday">Yesterday</option>
+        <option value="wtd">WTD</option>
+        <option value="mtd">MTD</option>
+      </select>
+      <select id="f-bu-sku" onchange="loadSkuReview()">
+        <option value="all">All business units</option>
+        <option value="3PL B2B">3PL B2B</option><option value="3PL B2C">3PL B2C</option>
+        <option value="Dark Store">Dark Store</option><option value="Self Warehouse">Self Warehouse</option>
+      </select>
+      <select id="f-brand-sku" onchange="loadSkuReview()">
+        <option value="all">All brands</option>
+        <option value="Little Joy">Little Joy</option><option value="Be Bodywise">Be Bodywise</option>
+        <option value="Man Matters">Man Matters</option><option value="OWN">OWN</option>
+      </select>
+    </div>
+  </div>
+  <div id="skureview-content"><div class="loading-state"><div class="spinner"></div>Loading...</div></div>
+</div>
 
 <!-- TAB: YESTERDAY -->
 <div class="tab-section active" id="tab-yesterday">
@@ -413,8 +446,189 @@ function switchTab(id, btn) {
   document.getElementById('tab-' + id).classList.add('active');
   btn.classList.add('active');
   activeTab = id;
-  if (id === 'prohibited') loadProhibited();
+  if      (id === 'prohibited') loadProhibited();
+  else if (id === 'skureview')  loadSkuReview();
   else loadPeriodTab(id);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SKU REVIEW TAB
+// ═══════════════════════════════════════════════════════════
+async function loadSkuReview() {
+  const el     = document.getElementById('skureview-content');
+  const period = _fv('f-period-sku') || 'yesterday';
+  const bu     = _fv('f-bu-sku');
+  const brand  = _fv('f-brand-sku');
+  try {
+    el.innerHTML = _loadingHTML('Loading SKU review data...');
+    setStatus('loading', 'Loading SKU review...');
+    const [data, remData] = await Promise.all([
+      apiFetch({ action:'summary', period, bu, brand, inv:'all' }),
+      apiFetch({ action:'remarks' })
+    ]);
+    allRemarks = remData || [];
+    cachedData['skureview_'+period] = data;
+
+    const disc = data.skuDiscrepant || [];
+    const nv   = data.skuNullVoid   || [];
+
+    // Update badge
+    document.getElementById('sku-review-count').textContent = disc.length || 0;
+
+    if (!disc.length && !nv.length) {
+      el.innerHTML = '<div class="empty-state">No SKU data found for this period and filters.</div>';
+      setStatus('live', 'Live data');
+      return;
+    }
+
+    // Summary bar
+    const summaryBar = `
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;
+          background:#FFF8E1;border:1px solid #F9A825;border-radius:var(--radius-md)">
+          <span style="font-size:16px">⚠️</span>
+          <div>
+            <div style="font-size:18px;font-weight:700;color:var(--c-amber);line-height:1">${disc.length}</div>
+            <div style="font-size:10px;color:#854F0B;text-transform:uppercase;letter-spacing:.4px">Unbalanced SKUs</div>
+            <div style="font-size:10px;color:#854F0B">Add ≠ Remove · needs review</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;
+          background:var(--c-teal-lt);border:1px solid var(--c-teal);border-radius:var(--radius-md)">
+          <span style="font-size:16px">✅</span>
+          <div>
+            <div style="font-size:18px;font-weight:700;color:var(--c-teal);line-height:1">${nv.length}</div>
+            <div style="font-size:10px;color:var(--c-teal-dk);text-transform:uppercase;letter-spacing:.4px">Balanced SKUs</div>
+            <div style="font-size:10px;color:var(--c-teal-dk)">Add = Remove · excluded below</div>
+          </div>
+        </div>
+      </div>`;
+
+    if (!disc.length) {
+      el.innerHTML = summaryBar + `<div class="empty-state" style="background:var(--c-teal-lt);
+        border:1px solid var(--c-teal);border-radius:var(--radius-lg);padding:20px">
+        ✅ All ${nv.length} SKUs are balanced (Add = Remove). Nothing to review.
+      </div>`;
+      setStatus('live', 'Live data');
+      return;
+    }
+
+    // Full SKU review table
+    const tableRows = disc.map((s, i) => {
+      const relRemarks = allRemarks.filter(r => (r.remark||'').includes(s.skuCode));
+      const hasRemark  = relRemarks.length > 0;
+      const remarksHTML = relRemarks.map(r => `
+        <div style="margin-top:4px;padding:5px 8px;background:var(--c-teal-lt);
+          border-radius:var(--radius-sm);font-size:11px">
+          <span style="font-weight:600;color:var(--c-text)">${r.name||'—'}</span>
+          <span style="color:var(--c-text-3);margin-left:6px">${r.submittedAt||''}</span>
+          <div style="margin-top:2px">${r.remark||''}</div>
+        </div>`).join('');
+
+      return `
+        <tr class="sku-review-tr" id="skurev-tr-${i}" onclick="toggleSkuReviewRow(${i})">
+          <td style="font-size:10px;text-align:center;color:var(--c-text-3);width:24px">
+            <span id="skurev-arrow-${i}">▶</span>
+          </td>
+          <td style="font-weight:600;font-size:11px">${s.skuCode}</td>
+          <td style="font-size:11px;color:var(--c-text-2);max-width:200px">${s.itemName||'—'}</td>
+          <td><span class="badge ${BU_BADGE[s.bu]||'b-unk'}">${s.bu}</span></td>
+          <td style="font-size:11px;color:var(--c-text-2)">${s.facility}</td>
+          <td style="font-size:10px;color:var(--c-text-3)">${s.invType==='GOOD_INVENTORY'?'Good':'Bad'}</td>
+          <td class="nr"><span class="pill p-add">${_fmtN(s.addQty)}</span></td>
+          <td class="nr"><span class="pill p-rem">${_fmtN(s.removeQty)}</span></td>
+          <td class="nr" style="font-weight:700;color:${s.net>0?'var(--c-green)':'var(--c-red)'}">
+            ${s.net>0?'+':''}${_fmtN(s.net)}
+          </td>
+          <td style="font-size:10px">
+            ${hasRemark
+              ? `<span style="color:var(--c-teal)">✅ ${relRemarks.length}</span>`
+              : `<span style="color:var(--c-amber)">⚠ Add remark</span>`}
+          </td>
+        </tr>
+        <tr id="skurev-panel-${i}" style="display:none">
+          <td colspan="10" style="padding:10px 14px 12px 32px;background:#FFFBF2;
+            border-top:1px dashed #F9A825">
+            ${remarksHTML ? `<div style="margin-bottom:8px">${remarksHTML}</div>` : ''}
+            <div style="font-size:11px;font-weight:600;color:var(--c-text-2);margin-bottom:6px">
+              Add remark — explain why Add (${_fmtN(s.addQty)}) ≠ Remove (${_fmtN(s.removeQty)}) for ${s.skuCode}
+            </div>
+            <div class="sku-add-form">
+              <input class="sku-add-name" type="text" placeholder="Your name *" id="skurev-name-${i}">
+              <textarea class="sku-add-text" id="skurev-text-${i}"
+                placeholder="Reason for discrepancy at ${s.facility} (${s.invType==='GOOD_INVENTORY'?'Good':'Bad'} stock)…"></textarea>
+              <button class="btn-sku-save"
+                onclick="saveSkuReviewRemark(${i},'${_escKey(s.skuCode)}','${_escKey(s.facility)}','${_escKey(s.invType)}')">
+                Save
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = summaryBar + `
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3>Unbalanced SKUs — Add ≠ Remove</h3>
+          <div style="font-size:10px;color:var(--c-text-3);margin-top:2px">
+            Click any row to expand and add a remark · ${disc.length} SKU${disc.length>1?'s':''} need review
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th style="width:24px"></th>
+              <th>SKU Code</th>
+              <th>Item Name</th>
+              <th>Business Unit</th>
+              <th>Facility</th>
+              <th>Inv Type</th>
+              <th class="nr">Add Qty</th>
+              <th class="nr">Remove Qty</th>
+              <th class="nr">Net</th>
+              <th>Remark</th>
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    setStatus('live', 'Live data · ' + (data.generatedAt || ''));
+  } catch(e) { showError(el, e); }
+}
+
+function toggleSkuReviewRow(i) {
+  const panel = document.getElementById('skurev-panel-' + i);
+  const arrow = document.getElementById('skurev-arrow-' + i);
+  if (!panel) return;
+  const showing = panel.style.display !== 'none';
+  panel.style.display = showing ? 'none' : 'table-row';
+  if (arrow) arrow.textContent = showing ? '▶' : '▼';
+}
+
+async function saveSkuReviewRemark(i, skuCode, facility, invType) {
+  const nameEl = document.getElementById('skurev-name-' + i);
+  const textEl = document.getElementById('skurev-text-' + i);
+  const name   = nameEl ? nameEl.value.trim() : '';
+  const text   = textEl ? textEl.value.trim() : '';
+  if (!name || !text) { alert('Please enter your name and remark.'); return; }
+  const btn = document.querySelector('#skurev-panel-'+i+' .btn-sku-save');
+  if (btn) { btn.textContent='Saving…'; btn.disabled=true; }
+  try {
+    await apiFetch({
+      action:'saveRemark', name, facility,
+      tags:'SKU Discrepancy',
+      remarkText:'[SKU: '+skuCode+' | '+invType+' | '+facility+'] '+text
+    });
+    if (nameEl) nameEl.value='';
+    if (textEl) textEl.value='';
+    if (btn) { btn.textContent='Save'; btn.disabled=false; }
+    // Reload to show new remark
+    loadSkuReview();
+  } catch(e) {
+    alert('Error saving: '+e.message);
+    if (btn) { btn.textContent='Save'; btn.disabled=false; }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -436,7 +650,6 @@ async function loadPeriodTab(period) {
 
     el.innerHTML = buildSummaryHTML(period, data);
     renderCharts(period, data);
-    renderSkuDiscrepancies(period, data);
     setStatus('live', 'Live data · ' + (data.generatedAt || ''));
   } catch(e) { showError(el, e); }
 }
@@ -468,15 +681,16 @@ function buildSummaryHTML(period, d) {
   const discCount = m.skuDiscrepantCount || 0;
   const nvCount   = m.skuNullVoidCount   || 0;
 
+  // 8 cards — all labels kept to one line (max ~14 chars uppercase)
   const cards = [
-    {l:'Total add qty',     v:_fmtN(m.addQty),             s:'Units added',    cls:'cv-teal'},
-    {l:'Total remove qty',  v:_fmtN(m.remQty),             s:'Units removed',  cls:'cv-red'},
-    {l:'Net movement',      v:(net>=0?'+':'')+_fmtN(net),  s:'Add − Remove',   cls:net>=0?'cv-teal':'cv-red'},
-    {l:'Good inventory add',v:_fmtN(m.goodAdd),            s:'GOOD_INVENTORY', cls:'cv-blue'},
-    {l:'Bad inventory add', v:_fmtN(m.badAdd),             s:'BAD_INVENTORY',  cls:'cv-amber'},
-    {l:'Active facilities', v:m.facilities||0,             s:'In period',      cls:'cv-purple'},
-    {l:'SKUs — null & void',v:_fmtN(nvCount),              s:'Add = Remove',   cls:'cv-teal'},
-    {l:'SKUs — discrepant', v:_fmtN(discCount),            s:'Need remarks',   cls:discCount>0?'cv-amber':'cv-teal'},
+    {l:'Total Add',        v:_fmtN(m.addQty),                      s:'Units added',          cls:'cv-teal'},
+    {l:'Total Remove',     v:_fmtN(m.remQty),                      s:'Units removed',        cls:'cv-red'},
+    {l:'Net Movement',     v:(net>=0?'+':'')+_fmtN(net),           s:'Add − Remove',         cls:net>=0?'cv-teal':'cv-red'},
+    {l:'Good Add',         v:_fmtN(m.goodAdd),                     s:'Good stock added',     cls:'cv-blue'},
+    {l:'Good Remove',      v:_fmtN(m.goodRemove||0),               s:'Good stock removed',   cls:'cv-teal'},
+    {l:'Bad Add',          v:_fmtN(m.badAdd),                      s:'Bad stock added',      cls:'cv-amber'},
+    {l:'Bad Remove',       v:_fmtN(m.badRemove||0),                s:'Bad stock removed',    cls:'cv-red'},
+    {l:'Facilities',       v:m.facilities||0,                      s:'Active in period',     cls:'cv-purple'},
   ];
 
   const metrics = `
@@ -533,46 +747,9 @@ function buildSummaryHTML(period, d) {
       </div>
     </div>`;
 
-  const facTable = `
-    <div class="divider-label">Facility detail</div>
-    <div class="table-card section">
-      <div class="table-card-header">
-        <h3>Facility-wise batch adjustment</h3>
-        <div style="font-size:10px;color:var(--c-text-3);margin-top:2px">Sorted by total volume</div>
-      </div>
-      <div class="table-scroll">
-        <table><thead><tr>
-          <th>Facility</th><th>Business unit</th>
-          <th class="nr">Add qty</th><th class="nr">Remove qty</th><th class="nr">Net</th>
-          <th class="nr">Good add</th><th class="nr">Good rem</th>
-          <th class="nr">Bad add</th><th class="nr">Bad rem</th>
-          <th class="nr">Txns</th>
-        </tr></thead><tbody>
-          ${(d.facilityRows||[]).map(r=>{
-            const net=r.add-r.rem;
-            return `<tr>
-              <td style="font-weight:500">${r.facility}</td>
-              <td><span class="badge ${BU_BADGE[r.bu]||'b-unk'}">${r.bu}</span></td>
-              <td class="nr"><span class="pill p-add">${_fmtN(r.add)}</span></td>
-              <td class="nr"><span class="pill p-rem">${_fmtN(r.rem)}</span></td>
-              <td class="nr ${net>=0?'p-pos':'p-neg'}" style="font-weight:700">${net>=0?'+':''}${_fmtN(net)}</td>
-              <td class="nr" style="color:#3B6D11">${_fmtN(r.gAdd)}</td>
-              <td class="nr" style="color:#0F6E56">${_fmtN(r.gRem)}</td>
-              <td class="nr" style="color:#BA7517">${r.bAdd?_fmtN(r.bAdd):'-'}</td>
-              <td class="nr" style="color:#C62828">${r.bRem?_fmtN(r.bRem):'-'}</td>
-              <td class="nr" style="color:var(--c-text-3)">${_fmtN(r.txns)}</td>
-            </tr>`;
-          }).join('')}
-        </tbody></table>
-      </div>
-    </div>`;
+  const facTable = ''; // removed per requirement
 
-  // Placeholder divs for SKU section (rendered after charts)
-  const skuSection = `
-    <div class="divider-label">SKU-level Add vs Remove</div>
-    <div id="sku-disc-${pfx}" class="section"></div>`;
-
-  return metrics + charts + facTable + skuSection;
+  return metrics + charts + facTable;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -648,11 +825,11 @@ function renderSkuDiscrepancies(period, data) {
     discHTML = `
       <div class="sku-disc-card">
         <div class="sku-disc-header">
-          <h3>⚠️ SKUs where Add ≠ Remove — Remarks required</h3>
+          <h3>⚠️ Unbalanced SKUs — Add ≠ Remove (Remarks required)</h3>
           <div class="sku-disc-counts">
-            <span style="color:var(--c-amber);font-weight:600">${disc.length} discrepant SKU${disc.length>1?'s':''}</span>
+            <span style="color:var(--c-amber);font-weight:600">${disc.length} unbalanced SKU${disc.length>1?'s':''} need review</span>
             <span style="color:var(--c-text-3)">·</span>
-            <span style="color:var(--c-teal)">${nv.length} null &amp; void</span>
+            <span style="color:var(--c-teal)">${nv.length} balanced</span>
           </div>
         </div>
         <!-- Column headers -->
@@ -671,12 +848,12 @@ function renderSkuDiscrepancies(period, data) {
         ${rows}
         ${nv.length ? `<div class="sku-nv-row">
           <span class="sku-nv-pill">✅ Null &amp; Void</span>
-          <span style="color:var(--c-text-2)">${nv.length} SKU${nv.length>1?'s':''} where Add = Remove — no action needed</span>
+          <span style="color:var(--c-text-2)">${nv.length} Balanced SKU${nv.length>1?'s':''} (Add = Remove) — no action needed</span>
         </div>` : ''}
       </div>`;
   } else {
     discHTML = `<div class="empty-state" style="background:var(--c-teal-lt);border:1px solid var(--c-teal);border-radius:var(--radius-lg);padding:20px">
-      ✅ All ${nv.length} SKUs are null &amp; void (Add = Remove). No discrepancies.
+      ✅ All ${nv.length} SKUs are Balanced (Add = Remove). No unbalanced SKUs.
     </div>`;
   }
 
@@ -825,11 +1002,11 @@ function renderCharts(period, d) {
           {label:'Add', data:d.daily.map(r=>r.add),
            backgroundColor:'#C0DD97',borderColor:'#639922',borderWidth:1,borderRadius:3,
            datalabels:{anchor:'end',align:'end',color:'#3B6D11',font:{size:11,weight:'700'},
-             formatter:v=>v>0?_fmtK(v):'',padding:{bottom:2}}},
+             formatter:(v,ctx)=>{const mx=Math.max(...ctx.dataset.data);return(mx>0&&v/mx>=0.05)?_fmtK(v):'';},padding:{bottom:2}}},
           {label:'Remove', data:d.daily.map(r=>r.remove),
            backgroundColor:'#F7C1C1',borderColor:'#E24B4A',borderWidth:1,borderRadius:3,
            datalabels:{anchor:'end',align:'end',color:'#A32D2D',font:{size:11,weight:'700'},
-             formatter:v=>v>0?_fmtK(v):'',padding:{bottom:2}}}
+             formatter:(v,ctx)=>{const mx=Math.max(...ctx.dataset.data);return(mx>0&&v/mx>=0.05)?_fmtK(v):'';},padding:{bottom:2}}}
         ]
       },
       options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:28}},
@@ -859,7 +1036,11 @@ function renderCharts(period, d) {
           backgroundColor:BFILL[b],borderColor:BBORDER[b],borderWidth:1,borderRadius:2,
           maxBarThickness:activeBrands.length===1?50:60,
           datalabels:{anchor:'center',align:'center',color:BBORDER[b],
-            font:{size:11,weight:'700'},formatter:v=>v>200?_fmtK(v):''}
+            font:{size:11,weight:'700'},
+            formatter:(v,ctx)=>{
+              const total=ctx.chart.data.datasets.reduce((s,ds)=>s+(ds.data[ctx.dataIndex]||0),0);
+              return(total>0&&v/total>=0.08)?_fmtK(v):'';
+            }}
         }))
       },
       options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:4}},
@@ -1003,6 +1184,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Load prohibited badge count in background
   apiFetch({ action:'prohibited' }).then(d=>{
     document.getElementById('proh-count').textContent = (d||[]).length || 0;
+  }).catch(()=>{});
+  // Pre-load SKU review badge (yesterday)
+  apiFetch({ action:'summary', period:'yesterday', bu:'all', brand:'all', inv:'all' }).then(d=>{
+    const count = (d.skuDiscrepant||[]).length;
+    document.getElementById('sku-review-count').textContent = count || 0;
   }).catch(()=>{});
 });
 </script>
