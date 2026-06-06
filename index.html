@@ -463,19 +463,21 @@ async function loadSkuReview() {
     el.innerHTML = _loadingHTML('Loading SKU review data...');
     setStatus('loading', 'Loading SKU review...');
     const [data, remData] = await Promise.all([
-      apiFetch({ action:'summary', period, bu, brand, inv:'all' }),
+      apiFetch({ action:'skureview', period, bu, brand }),
       apiFetch({ action:'remarks' })
     ]);
     allRemarks = remData || [];
     cachedData['skureview_'+period] = data;
 
-    const disc = data.skuDiscrepant || [];
-    const nv   = data.skuNullVoid   || [];
+    // skureview action returns: { discrepantCount, balancedCount, totalSkus, skus[] }
+    const disc    = data.skus            || [];
+    const discCnt = data.discrepantCount || disc.length;
+    const nvCnt   = data.balancedCount   || 0;
 
     // Update badge
-    document.getElementById('sku-review-count').textContent = disc.length || 0;
+    document.getElementById('sku-review-count').textContent = discCnt || 0;
 
-    if (!disc.length && !nv.length) {
+    if (data.totalSkus === 0 || (!discCnt && !nvCnt)) {
       el.innerHTML = '<div class="empty-state">No SKU data found for this period and filters.</div>';
       setStatus('live', 'Live data');
       return;
@@ -488,7 +490,7 @@ async function loadSkuReview() {
           background:#FFF8E1;border:1px solid #F9A825;border-radius:var(--radius-md)">
           <span style="font-size:16px">⚠️</span>
           <div>
-            <div style="font-size:18px;font-weight:700;color:var(--c-amber);line-height:1">${disc.length}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--c-amber);line-height:1">${discCnt}</div>
             <div style="font-size:10px;color:#854F0B;text-transform:uppercase;letter-spacing:.4px">Unbalanced SKUs</div>
             <div style="font-size:10px;color:#854F0B">Add ≠ Remove · needs review</div>
           </div>
@@ -497,17 +499,17 @@ async function loadSkuReview() {
           background:var(--c-teal-lt);border:1px solid var(--c-teal);border-radius:var(--radius-md)">
           <span style="font-size:16px">✅</span>
           <div>
-            <div style="font-size:18px;font-weight:700;color:var(--c-teal);line-height:1">${nv.length}</div>
+            <div style="font-size:18px;font-weight:700;color:var(--c-teal);line-height:1">${nvCnt}</div>
             <div style="font-size:10px;color:var(--c-teal-dk);text-transform:uppercase;letter-spacing:.4px">Balanced SKUs</div>
             <div style="font-size:10px;color:var(--c-teal-dk)">Add = Remove · excluded below</div>
           </div>
         </div>
       </div>`;
 
-    if (!disc.length) {
+    if (!discCnt) {
       el.innerHTML = summaryBar + `<div class="empty-state" style="background:var(--c-teal-lt);
         border:1px solid var(--c-teal);border-radius:var(--radius-lg);padding:20px">
-        ✅ All ${nv.length} SKUs are balanced (Add = Remove). Nothing to review.
+        ✅ All ${nvCnt} SKUs are balanced (Add = Remove). Nothing to review.
       </div>`;
       setStatus('live', 'Live data');
       return;
@@ -571,7 +573,7 @@ async function loadSkuReview() {
         <div class="table-card-header">
           <h3>Unbalanced SKUs — Add ≠ Remove</h3>
           <div style="font-size:10px;color:var(--c-text-3);margin-top:2px">
-            Click any row to expand and add a remark · ${disc.length} SKU${disc.length>1?'s':''} need review
+            Click any row to expand and add a remark · ${discCnt} SKU${discCnt>1?'s':''} need review
           </div>
         </div>
         <div class="table-scroll">
@@ -752,150 +754,6 @@ function buildSummaryHTML(period, d) {
   return metrics + charts + facTable;
 }
 
-// ═══════════════════════════════════════════════════════════
-//  SKU DISCREPANCY SECTION (Add ≠ Remove at SKU level)
-// ═══════════════════════════════════════════════════════════
-function renderSkuDiscrepancies(period, data) {
-  const pfx = period;
-  const el  = document.getElementById('sku-disc-' + pfx);
-  if (!el) return;
-
-  const disc = data.skuDiscrepant || [];
-  const nv   = data.skuNullVoid   || [];
-
-  if (!disc.length && !nv.length) {
-    el.innerHTML = '<div class="empty-state">✅ No SKU-level data available for this period.</div>';
-    return;
-  }
-
-  // Build discrepant rows
-  let discHTML = '';
-  if (disc.length) {
-    const rows = disc.map((s, i) => {
-      const skuKey = _escKey(s.skuCode + '_' + s.facility + '_' + s.invType);
-      const relRemarks = allRemarks.filter(r =>
-        (r.remark||'').includes(s.skuCode) || (r.remark||'').includes(s.batch||''));
-      const remarksHTML = relRemarks.map(r => `
-        <div class="sku-remark-item">
-          <div class="sku-remark-meta">
-            <span style="font-weight:600;color:var(--c-text)">${r.name||'—'}</span>
-            <span>${r.submittedAt||''}</span>
-            ${r.facility?`<span>📍 ${r.facility}</span>`:''}
-          </div>
-          <div>${r.remark||''}</div>
-        </div>`).join('');
-
-      return `<div class="sku-row-wrap" id="skuw-${pfx}-${i}">
-        <div class="sku-main-row" onclick="toggleSkuPanel('${pfx}',${i})">
-          <span class="sku-cell sku-cell-expand" id="sku-arrow-${pfx}-${i}">▶</span>
-          <span class="sku-cell" style="flex:2;font-weight:500;min-width:120px">${s.skuCode}</span>
-          <span class="sku-cell" style="flex:2;color:var(--c-text-3);font-size:10px;min-width:140px">${s.itemName||''}</span>
-          <span class="sku-cell" style="flex:1;min-width:80px">
-            <span class="badge ${BU_BADGE[s.bu]||'b-unk'}" style="font-size:9px">${s.bu}</span>
-          </span>
-          <span class="sku-cell" style="flex:1;min-width:80px;color:var(--c-text-3);font-size:10px">${s.facility}</span>
-          <span class="sku-cell" style="min-width:60px;color:var(--c-text-3);font-size:10px">${s.invType==='GOOD_INVENTORY'?'Good':'Bad'}</span>
-          <span class="sku-cell nr" style="min-width:64px"><span class="pill p-add">${_fmtN(s.addQty)}</span></span>
-          <span class="sku-cell nr" style="min-width:64px"><span class="pill p-rem">${_fmtN(s.removeQty)}</span></span>
-          <span class="sku-cell nr" style="min-width:60px;font-weight:700;color:${s.net>=0?'var(--c-green)':'var(--c-red)'}">${s.net>=0?'+':''}${_fmtN(s.net)}</span>
-          <span class="sku-cell" style="min-width:80px">
-            ${relRemarks.length
-              ? `<span style="font-size:10px;color:var(--c-teal)">✅ ${relRemarks.length} remark${relRemarks.length>1?'s':''}</span>`
-              : `<span style="font-size:10px;color:var(--c-amber)">⚠ Needs remark</span>`}
-          </span>
-        </div>
-        <div class="sku-remark-panel" id="skupanel-${pfx}-${i}">
-          ${remarksHTML ? `<div class="sku-existing-remarks">${remarksHTML}</div>` : ''}
-          <div style="font-size:11px;font-weight:600;color:var(--c-text-2);margin-bottom:6px">
-            Add remark for this SKU discrepancy
-          </div>
-          <div class="sku-add-form">
-            <input class="sku-add-name" type="text" placeholder="Your name *"
-              id="skuname-${pfx}-${i}">
-            <textarea class="sku-add-text" placeholder="Explain why Add (${_fmtN(s.addQty)}) ≠ Remove (${_fmtN(s.removeQty)}) for ${s.skuCode} at ${s.facility}…"
-              id="skutext-${pfx}-${i}"></textarea>
-            <button class="btn-sku-save" onclick="saveSkuRemark('${pfx}',${i},'${_escKey(s.skuCode)}','${_escKey(s.facility)}','${_escKey(s.invType)}')">
-              Save
-            </button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    discHTML = `
-      <div class="sku-disc-card">
-        <div class="sku-disc-header">
-          <h3>⚠️ Unbalanced SKUs — Add ≠ Remove (Remarks required)</h3>
-          <div class="sku-disc-counts">
-            <span style="color:var(--c-amber);font-weight:600">${disc.length} unbalanced SKU${disc.length>1?'s':''} need review</span>
-            <span style="color:var(--c-text-3)">·</span>
-            <span style="color:var(--c-teal)">${nv.length} balanced</span>
-          </div>
-        </div>
-        <!-- Column headers -->
-        <div style="display:flex;background:var(--c-bg);padding:5px 0;border-bottom:1px solid var(--c-border)">
-          <span style="width:28px;flex-shrink:0"></span>
-          <span style="flex:2;min-width:120px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px">SKU</span>
-          <span style="flex:2;min-width:140px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px">Item name</span>
-          <span style="flex:1;min-width:80px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px">BU</span>
-          <span style="flex:1;min-width:80px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px">Facility</span>
-          <span style="min-width:60px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px">Inv</span>
-          <span style="min-width:64px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px;text-align:right">Add</span>
-          <span style="min-width:64px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px;text-align:right">Remove</span>
-          <span style="min-width:60px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px;text-align:right">Net</span>
-          <span style="min-width:80px;font-size:10px;font-weight:600;color:var(--c-text-3);padding:0 10px;text-transform:uppercase;letter-spacing:.4px">Remark</span>
-        </div>
-        ${rows}
-        ${nv.length ? `<div class="sku-nv-row">
-          <span class="sku-nv-pill">✅ Null &amp; Void</span>
-          <span style="color:var(--c-text-2)">${nv.length} Balanced SKU${nv.length>1?'s':''} (Add = Remove) — no action needed</span>
-        </div>` : ''}
-      </div>`;
-  } else {
-    discHTML = `<div class="empty-state" style="background:var(--c-teal-lt);border:1px solid var(--c-teal);border-radius:var(--radius-lg);padding:20px">
-      ✅ All ${nv.length} SKUs are Balanced (Add = Remove). No unbalanced SKUs.
-    </div>`;
-  }
-
-  el.innerHTML = discHTML;
-}
-
-function toggleSkuPanel(pfx, i) {
-  const panel = document.getElementById('skupanel-' + pfx + '-' + i);
-  const arrow = document.getElementById('sku-arrow-' + pfx + '-' + i);
-  if (!panel) return;
-  const open = panel.classList.toggle('open');
-  if (arrow) arrow.textContent = open ? '▼' : '▶';
-}
-
-async function saveSkuRemark(pfx, i, skuCode, facility, invType) {
-  const nameEl = document.getElementById('skuname-' + pfx + '-' + i);
-  const textEl = document.getElementById('skutext-' + pfx + '-' + i);
-  const name   = nameEl ? nameEl.value.trim() : '';
-  const text   = textEl ? textEl.value.trim() : '';
-  if (!name || !text) { alert('Please enter your name and remark.'); return; }
-
-  const btn = document.querySelector(`#skupanel-${pfx}-${i} .btn-sku-save`);
-  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
-
-  try {
-    await apiFetch({
-      action: 'saveRemark', name, facility,
-      tags: 'SKU Discrepancy',
-      remarkText: '[SKU: ' + skuCode + ' | ' + invType + ' | ' + facility + '] ' + text
-    });
-    if (nameEl) nameEl.value = '';
-    if (textEl) textEl.value = '';
-    // Reload remarks then re-render
-    const remData = await apiFetch({ action:'remarks' });
-    allRemarks = remData || [];
-    const cached = cachedData[pfx];
-    if (cached) renderSkuDiscrepancies(pfx, cached);
-  } catch(e) {
-    alert('Error saving: ' + e.message);
-    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
-  }
-}
 
 // ═══════════════════════════════════════════════════════════
 //  PROHIBITED renderer
@@ -1185,10 +1043,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   apiFetch({ action:'prohibited' }).then(d=>{
     document.getElementById('proh-count').textContent = (d||[]).length || 0;
   }).catch(()=>{});
-  // Pre-load SKU review badge (yesterday)
-  apiFetch({ action:'summary', period:'yesterday', bu:'all', brand:'all', inv:'all' }).then(d=>{
-    const count = (d.skuDiscrepant||[]).length;
-    document.getElementById('sku-review-count').textContent = count || 0;
+  // Pre-load SKU review badge (yesterday) — lean endpoint
+  apiFetch({ action:'skureview', period:'yesterday', bu:'all', brand:'all' }).then(d=>{
+    document.getElementById('sku-review-count').textContent = d.discrepantCount || 0;
   }).catch(()=>{});
 });
 </script>
