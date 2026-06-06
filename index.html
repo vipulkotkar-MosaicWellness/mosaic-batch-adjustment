@@ -276,7 +276,7 @@ tbody tr:hover td{background:#F4FAF7}
     <div class="filters-row">
       <select id="f-period-sku" onchange="loadSkuReview()">
         <option value="yesterday">Yesterday</option>
-        <option value="wtd">WTD</option>
+        <option value="wtd" selected>WTD</option>
         <option value="mtd">MTD</option>
       </select>
       <select id="f-bu-sku" onchange="loadSkuReview()">
@@ -478,8 +478,18 @@ async function loadSkuReview() {
     document.getElementById('sku-review-count').textContent = discCnt || 0;
 
     if (data.totalSkus === 0 || (!discCnt && !nvCnt)) {
-      el.innerHTML = '<div class="empty-state">No SKU data found for this period and filters.</div>';
-      setStatus('live', 'Live data');
+      el.innerHTML = `<div class="empty-state" style="padding:36px 24px">
+        <div style="font-size:24px;margin-bottom:8px">📭</div>
+        <div style="font-size:13px;font-weight:600;color:var(--c-text-2);margin-bottom:6px">
+          No data for <strong>${period.toUpperCase()}</strong>
+        </div>
+        <div style="font-size:11px;color:var(--c-text-3);max-width:320px;margin:0 auto;line-height:1.7">
+          The sheet has no batch adjustment rows for this period.<br>
+          Try switching to <strong>WTD</strong> or <strong>MTD</strong> — those cover more dates.<br>
+          If data was imported today, run <strong>testRun()</strong> in Apps Script to import it.
+        </div>
+      </div>`;
+      setStatus('live', 'Live data · ' + (data.generatedAt || ''));
       return;
     }
 
@@ -1043,8 +1053,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   apiFetch({ action:'prohibited' }).then(d=>{
     document.getElementById('proh-count').textContent = (d||[]).length || 0;
   }).catch(()=>{});
-  // Pre-load SKU review badge (yesterday) — lean endpoint
-  apiFetch({ action:'skureview', period:'yesterday', bu:'all', brand:'all' }).then(d=>{
+  // Pre-load SKU review badge (wtd) — lean endpoint
+  apiFetch({ action:'skureview', period:'wtd', bu:'all', brand:'all' }).then(d=>{
     document.getElementById('sku-review-count').textContent = d.discrepantCount || 0;
   }).catch(()=>{});
 });
