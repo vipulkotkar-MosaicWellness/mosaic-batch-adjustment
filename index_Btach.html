@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mosaic Wellness — Batch Adjustment MIS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+/* ── Reset & base ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c-bg:#F8FAF9;--c-surface:#FFFFFF;--c-border:#E5EBE8;--c-border-md:#C8D6CF;
+  --c-text:#1A2E25;--c-text-2:#4A6358;--c-text-3:#7A9589;
+  --c-teal:#1D9E75;--c-teal-lt:#E1F5EE;--c-teal-dk:#0F6E56;
+  --c-red:#E24B4A;--c-red-lt:#FFEBEE;--c-blue:#378ADD;--c-blue-lt:#E6F1FB;
+  --c-amber:#BA7517;--c-amber-lt:#FAEEDA;--c-purple:#7F77DD;--c-purple-lt:#EEEDFE;
+  --c-green-lt:#EAF3DE;--c-green:#639922;
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:14px;color:var(--c-text);background:var(--c-bg);line-height:1.5;min-height:100vh}
+
+/* ── Layout ── */
+.app{max-width:1200px;margin:0 auto;padding:20px 24px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.section{margin-bottom:20px}
+@media(max-width:640px){.two-col{grid-template-columns:1fr}.app{padding:12px 14px}}
+
+/* ── Header ── */
+.app-header{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:12px;padding-bottom:16px;margin-bottom:4px;
+  border-bottom:1px solid var(--c-border)}
+.brand-row{display:flex;align-items:center;gap:10px}
+.brand-dot{width:32px;height:32px;border-radius:50%;background:var(--c-teal-lt);
+  display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.brand-name{font-size:16px;font-weight:600;color:var(--c-text)}
+.brand-sub{font-size:11px;color:var(--c-text-3);margin-top:1px}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hbtn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--radius-md);
+  border:1px solid var(--c-border-md);background:var(--c-surface);font-size:12px;
+  font-weight:500;color:var(--c-text-2);cursor:pointer;text-decoration:none;
+  transition:all .15s;white-space:nowrap}
+.hbtn:hover{border-color:var(--c-teal);color:var(--c-teal);background:var(--c-teal-lt)}
+.hbtn svg{width:14px;height:14px;flex-shrink:0}
+.hbtn-green{border-color:var(--c-teal);color:var(--c-teal);background:var(--c-teal-lt)}
+.hbtn-green:hover{background:#9FE1CB}
+
+/* ── Status bar ── */
+.status-bar{display:flex;align-items:center;gap:10px;font-size:11px;
+  color:var(--c-text-3);padding:8px 0;margin-bottom:4px;flex-wrap:wrap}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#ccc;flex-shrink:0}
+.status-dot.live{background:var(--c-teal);box-shadow:0 0 0 3px rgba(29,158,117,.2)}
+.status-dot.error{background:var(--c-red)}
+.status-dot.loading{background:var(--c-amber);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.last-updated{margin-left:auto;color:var(--c-text-3)}
+
+/* ── Nav tabs ── */
+.nav-tabs{display:flex;gap:0;border-bottom:1px solid var(--c-border);margin-bottom:18px}
+.nav-tab{padding:10px 18px;font-size:12px;font-weight:500;color:var(--c-text-2);
+  border:none;background:transparent;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.nav-tab:hover{color:var(--c-text)}
+.nav-tab.active{color:var(--c-teal);border-bottom-color:var(--c-teal);font-weight:600}
+.badge-pill{background:var(--c-amber-lt);color:var(--c-amber);font-size:10px;
+  padding:1px 6px;border-radius:10px;font-weight:600;margin-left:2px}
+
+/* ── Tab sections ── */
+.tab-section{display:none}
+.tab-section.active{display:block}
+
+/* ── Section toolbar ── */
+.section-toolbar{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.period-toggle{display:flex;background:var(--c-bg);border:1px solid var(--c-border);
+  border-radius:var(--radius-md);padding:3px;gap:2px}
+.period-btn{padding:5px 16px;border-radius:6px;border:none;background:transparent;
+  font-size:12px;font-weight:500;cursor:pointer;color:var(--c-text-2);transition:all .15s}
+.period-btn.active{background:var(--c-surface);color:var(--c-teal);font-weight:600;
+  box-shadow:var(--shadow);border:1px solid var(--c-border)}
+.filters-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters-row select{font-size:12px;padding:5px 9px;border-radius:var(--radius-md);
+  border:1px solid var(--c-border-md);background:var(--c-surface);color:var(--c-text);
+  cursor:pointer;outline:none}
+.filters-row select:focus{border-color:var(--c-teal)}
+
+/* ── Divider labels ── */
+.divider-label{font-size:10px;font-weight:600;color:var(--c-text-3);
+  text-transform:uppercase;letter-spacing:.7px;margin:16px 0 10px;
+  display:flex;align-items:center;gap:8px}
+.divider-label::after{content:'';flex:1;height:1px;background:var(--c-border)}
+
+/* ── Metric cards ── */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.metric-card{background:var(--c-surface);border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow)}
+.m-label{font-size:10px;color:var(--c-text-3);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:6px;font-weight:500}
+.m-val{font-size:22px;font-weight:600;line-height:1.1;letter-spacing:-.3px}
+.m-sub{font-size:10px;color:var(--c-text-3);margin-top:3px}
+.cv-teal{color:var(--c-teal)}.cv-red{color:var(--c-red)}.cv-blue{color:var(--c-blue)}
+.cv-amber{color:var(--c-amber)}.cv-purple{color:var(--c-purple)}
+
+/* ── Chart cards ── */
+.chart-card{background:var(--c-surface);border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow)}
+.chart-card h3{font-size:12px;font-weight:600;color:var(--c-text-2);margin-bottom:2px}
+.chart-sub{font-size:10px;color:var(--c-text-3);margin-bottom:10px}
+.chart-wrap{position:relative;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.legend span{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--c-text-2)}
+.leg-sq{width:8px;height:8px;border-radius:2px;display:inline-block;flex-shrink:0}
+
+/* ── BU impact bars ── */
+.bu-card{background:var(--c-surface);border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);padding:16px;box-shadow:var(--shadow)}
+.bu-card h3{font-size:12px;font-weight:600;color:var(--c-text-2);margin-bottom:2px}
+.bu-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.bu-row:last-child{margin-bottom:0}
+.bu-left{width:96px;flex-shrink:0}
+.bu-name{font-size:12px;font-weight:500;color:var(--c-text)}
+.bu-fac{font-size:10px;color:var(--c-text-3);margin-top:1px}
+.bu-bar-wrap{flex:1;background:var(--c-bg);border-radius:4px;height:10px;overflow:hidden;
+  border:1px solid var(--c-border)}
+.bu-bar{height:100%;border-radius:4px;transition:width .5s ease}
+.bu-right{text-align:right;flex-shrink:0;width:88px}
+.bu-val{font-size:12px;font-weight:600}
+.bu-units{font-size:10px;color:var(--c-text-3);margin-top:1px}
+
+/* ── Table ── */
+.table-card{background:var(--c-surface);border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.table-card-header{padding:14px 16px;border-bottom:1px solid var(--c-border)}
+.table-card-header h3{font-size:12px;font-weight:600;color:var(--c-text-2);margin-bottom:1px}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead th{text-align:left;font-weight:600;color:var(--c-text-3);
+  padding:7px 10px;border-bottom:1px solid var(--c-border);white-space:nowrap;
+  font-size:10px;text-transform:uppercase;letter-spacing:.4px;background:var(--c-bg)}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--c-border);color:var(--c-text)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#F4FAF7}
+.nr{text-align:right}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.p-add{background:var(--c-green-lt);color:var(--c-green)}
+.p-rem{background:var(--c-red-lt);color:var(--c-red)}
+.p-pos{color:var(--c-green);font-weight:600}.p-neg{color:var(--c-red);font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:500}
+.b-b2b{background:var(--c-blue-lt);color:#185FA5}
+.b-b2c{background:var(--c-teal-lt);color:var(--c-teal-dk)}
+.b-ds{background:var(--c-amber-lt);color:var(--c-amber)}
+.b-sw{background:var(--c-purple-lt);color:var(--c-purple)}
+.b-unk{background:#F1EFE8;color:#5F5E5A}
+
+/* ── Prohibited cards ── */
+.proh-card{background:var(--c-surface);border:1px solid #EF9F27;
+  border-radius:var(--radius-lg);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.proh-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--c-amber-lt)}
+.proh-title{font-size:13px;font-weight:600;color:#633806}
+.proh-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.proh-field-label{font-size:10px;color:var(--c-text-3);text-transform:uppercase;
+  letter-spacing:.3px;margin-bottom:2px}
+.proh-field-val{font-size:12px;font-weight:500;color:var(--c-text)}
+.proh-remarks{margin-top:12px;padding:8px 12px;background:var(--c-amber-lt);
+  border-radius:var(--radius-sm);font-size:11px;color:#854F0B;line-height:1.6}
+
+/* ── Remarks ── */
+.remarks-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.add-remark-btn{display:flex;align-items:center;gap:5px;padding:7px 14px;
+  border-radius:var(--radius-md);border:1px solid var(--c-teal);
+  background:var(--c-teal-lt);color:var(--c-teal-dk);font-size:12px;font-weight:600;cursor:pointer}
+.add-remark-btn:hover{background:#9FE1CB}
+.remark-form{background:var(--c-bg);border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);padding:18px;margin-bottom:16px}
+.form-row{margin-bottom:12px}
+.form-label{font-size:11px;font-weight:600;color:var(--c-text-2);margin-bottom:5px;display:block}
+.form-label .req{color:var(--c-red)}
+.form-input{width:100%;padding:7px 10px;border-radius:var(--radius-md);
+  border:1px solid var(--c-border-md);background:var(--c-surface);color:var(--c-text);
+  font-size:12px;font-family:inherit;outline:none}
+.form-input:focus{border-color:var(--c-teal);box-shadow:0 0 0 3px rgba(29,158,117,.1)}
+textarea.form-input{resize:vertical;min-height:72px}
+.tag-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.tag-chip{padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid var(--c-border-md);
+  background:var(--c-surface);cursor:pointer;color:var(--c-text-2);
+  transition:all .12s;user-select:none}
+.tag-chip.selected{background:var(--c-teal-lt);border-color:var(--c-teal);
+  color:var(--c-teal-dk);font-weight:600}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+.btn-cancel{padding:6px 14px;border-radius:var(--radius-md);border:1px solid var(--c-border-md);
+  background:transparent;font-size:12px;cursor:pointer;color:var(--c-text-2)}
+.btn-save{padding:6px 16px;border-radius:var(--radius-md);border:none;
+  background:var(--c-teal);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+.btn-save:hover{background:var(--c-teal-dk)}
+.remark-list-card{background:var(--c-surface);border:1px solid var(--c-border);
+  border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.remark-list-header{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-bottom:1px solid var(--c-border);font-size:11px;
+  font-weight:600;color:var(--c-text-2);background:var(--c-bg)}
+.remark-item{padding:12px 14px;border-bottom:1px solid var(--c-border);
+  display:flex;align-items:flex-start;gap:10px}
+.remark-item:last-child{border-bottom:none}
+.remark-avatar{width:30px;height:30px;border-radius:50%;background:var(--c-teal-lt);
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  font-weight:700;color:var(--c-teal-dk);flex-shrink:0}
+.remark-meta{font-size:10px;color:var(--c-text-3);margin-bottom:4px;
+  display:flex;gap:8px;flex-wrap:wrap}
+.remark-text{font-size:12px;color:var(--c-text);line-height:1.55}
+.remark-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.remark-tag{padding:1px 7px;border-radius:8px;font-size:10px;
+  background:var(--c-bg);color:var(--c-text-2);border:1px solid var(--c-border)}
+
+/* ── Loading / empty states ── */
+.loading-state{display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;padding:48px 20px;color:var(--c-text-3);font-size:13px}
+.spinner{width:28px;height:28px;border:2px solid var(--c-border);
+  border-top-color:var(--c-teal);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:36px 20px;color:var(--c-text-3);font-size:12px}
+.error-banner{background:var(--c-red-lt);border:1px solid #FFCDD2;border-radius:var(--radius-md);
+  padding:12px 14px;font-size:12px;color:#C62828;margin-bottom:14px;display:none}
+
+/* ── Run log ── */
+.run-log-row-success td:nth-child(3){color:var(--c-teal);font-weight:600}
+.run-log-row-error   td:nth-child(3){color:var(--c-red);font-weight:600}
+.run-log-row-skipped td:nth-child(3){color:var(--c-amber);font-weight:600}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ HEADER ══ -->
+<header class="app-header">
+  <div class="brand-row">
+    <div class="brand-dot">🌿</div>
+    <div>
+      <div class="brand-name">Mosaic Wellness</div>
+      <div class="brand-sub">Batch Adjustment MIS · Live from Google Sheets</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="hbtn" onclick="refreshAll(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      Refresh
+    </button>
+    <a class="hbtn" id="sheet-link"
+       href="https://docs.google.com/spreadsheets/d/13YQMZ8hW3ILmfEp-WryBiLf34_GkYLK-p1tzvTVX6mI/edit"
+       target="_blank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      View sheet
+    </a>
+    <button class="hbtn hbtn-green" onclick="downloadReport()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download
+    </button>
+  </div>
+</header>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span class="status-dot loading" id="status-dot"></span>
+  <span id="status-text">Connecting to live data...</span>
+  <span class="last-updated" id="last-updated"></span>
+</div>
+
+<!-- Error banner -->
+<div class="error-banner" id="error-banner"></div>
+
+<!-- ══ NAV TABS ══ -->
+<nav class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('today',this)">
+    📅 Today's impact
+  </button>
+  <button class="nav-tab" onclick="switchTab('wtd',this)">
+    📈 WTD &amp; MTD
+  </button>
+  <button class="nav-tab" onclick="switchTab('remarks',this)">
+    📋 Remarks tracker
+  </button>
+  <button class="nav-tab" onclick="switchTab('prohibited',this)">
+    ⚠ Prohibited
+    <span class="badge-pill" id="proh-count">—</span>
+  </button>
+</nav>
+
+<!-- ══ TAB: TODAY ══ -->
+<div class="tab-section active" id="tab-today">
+  <div class="section-toolbar">
+    <div style="font-size:12px;color:var(--c-text-2)">
+      Showing: <strong id="today-label">today</strong> · Add &amp; Remove only
+    </div>
+    <div class="filters-row">
+      <select id="f-bu-t" onchange="loadTab('today')">
+        <option value="all">All business units</option>
+        <option value="3PL B2B">3PL B2B</option>
+        <option value="3PL B2C">3PL B2C</option>
+        <option value="Dark Store">Dark Store</option>
+        <option value="Self Warehouse">Self Warehouse</option>
+      </select>
+      <select id="f-brand-t" onchange="loadTab('today')">
+        <option value="all">All brands</option>
+        <option value="Little Joy">Little Joy</option>
+        <option value="Be Bodywise">Be Bodywise</option>
+        <option value="Man Matters">Man Matters</option>
+        <option value="OWN">OWN</option>
+      </select>
+      <select id="f-inv-t" onchange="loadTab('today')">
+        <option value="all">Good + Bad</option>
+        <option value="GOOD_INVENTORY">Good only</option>
+        <option value="BAD_INVENTORY">Bad only</option>
+      </select>
+    </div>
+  </div>
+  <div id="today-content"><div class="loading-state"><div class="spinner"></div>Loading today's data...</div></div>
+</div>
+
+<!-- ══ TAB: WTD & MTD ══ -->
+<div class="tab-section" id="tab-wtd">
+  <div class="section-toolbar">
+    <div class="period-toggle">
+      <button class="period-btn active" id="btn-wtd" onclick="setWTDPeriod('wtd',this)">WTD</button>
+      <button class="period-btn" id="btn-mtd" onclick="setWTDPeriod('mtd',this)">MTD</button>
+    </div>
+    <div class="filters-row">
+      <select id="f-bu-w" onchange="loadWTD()">
+        <option value="all">All business units</option>
+        <option value="3PL B2B">3PL B2B</option>
+        <option value="3PL B2C">3PL B2C</option>
+        <option value="Dark Store">Dark Store</option>
+        <option value="Self Warehouse">Self Warehouse</option>
+      </select>
+      <select id="f-brand-w" onchange="loadWTD()">
+        <option value="all">All brands</option>
+        <option value="Little Joy">Little Joy</option>
+        <option value="Be Bodywise">Be Bodywise</option>
+        <option value="Man Matters">Man Matters</option>
+        <option value="OWN">OWN</option>
+      </select>
+      <select id="f-inv-w" onchange="loadWTD()">
+        <option value="all">Good + Bad</option>
+        <option value="GOOD_INVENTORY">Good only</option>
+        <option value="BAD_INVENTORY">Bad only</option>
+      </select>
+    </div>
+  </div>
+  <div id="wtd-content"><div class="loading-state"><div class="spinner"></div>Loading...</div></div>
+</div>
+
+<!-- ══ TAB: REMARKS ══ -->
+<div class="tab-section" id="tab-remarks">
+  <div class="remarks-header">
+    <div>
+      <div style="font-size:13px;font-weight:600">Remarks tracker</div>
+      <div style="font-size:11px;color:var(--c-text-3);margin-top:2px">
+        Saved to NI_Remarks in Google Sheets
+      </div>
+    </div>
+    <button class="add-remark-btn" onclick="toggleRemarkForm()">+ Add remark</button>
+  </div>
+  <div class="remark-form" id="remark-form" style="display:none">
+    <div style="font-size:13px;font-weight:600;margin-bottom:14px">New remark</div>
+    <div class="form-row">
+      <label class="form-label">Your name <span class="req">*</span></label>
+      <input class="form-input" id="r-name" type="text" placeholder="e.g. Priya Sharma">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Facility</label>
+      <select class="form-input" id="r-facility">
+        <option value="">— select facility —</option>
+        <option>MH_PND_DELHI</option><option>SL Mother Hub</option>
+        <option>MM Beyond NCR</option><option>BW Ahmedabad</option>
+        <option>BW Beyond NCR</option><option>MP Beyond NCR</option>
+        <option>SL Ambient</option><option>BLR B2B Offline</option>
+        <option>BW Kolkata</option><option>LJ Beyond NCR</option><option>Other</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Tags</label>
+      <div class="tag-grid" id="tag-grid">
+        <span class="tag-chip" onclick="toggleTag(this)">Process Gap</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Vendor Issue</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Expiry Risk</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Quality Issue</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Warehouse Ops</span>
+        <span class="tag-chip" onclick="toggleTag(this)">System Triggered</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Cycle Count</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Forced Removal</span>
+        <span class="tag-chip" onclick="toggleTag(this)">Action Taken</span>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Remark / action required <span class="req">*</span></label>
+      <textarea class="form-input" id="r-text" placeholder="Describe the adjustment reason or action taken..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="toggleRemarkForm()">Cancel</button>
+      <button class="btn-save" onclick="submitRemark()">Save remark</button>
+    </div>
+  </div>
+  <div class="remark-list-card">
+    <div class="remark-list-header">
+      <span>Recent remarks</span>
+      <span id="remark-count" style="color:var(--c-text-3);font-weight:400">—</span>
+    </div>
+    <div id="remark-list"><div class="loading-state"><div class="spinner"></div>Loading remarks...</div></div>
+  </div>
+</div>
+
+<!-- ══ TAB: PROHIBITED ══ -->
+<div class="tab-section" id="tab-prohibited">
+  <div style="margin-bottom:14px">
+    <div style="font-size:13px;font-weight:600">Prohibited movements — REPLACE transactions</div>
+    <div style="font-size:11px;color:var(--c-text-3);margin-top:3px">
+      Forceful replacements that bypassed WMS pendency checks. Each case requires investigation.
+      Written to NI_Prohibited in Google Sheets.
+    </div>
+  </div>
+  <div id="prohibited-content">
+    <div class="loading-state"><div class="spinner"></div>Loading...</div>
+  </div>
+</div>
+
+</div><!-- /.app -->
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  CONFIGURATION
+//  ⚠ Replace WEBAPP_URL with your deployed Apps Script Web App URL
+//  after deploying WebApp.gs (Deploy → New deployment → Web app)
+// ══════════════════════════════════════════════════════════════
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwpeXj67UZD1eTZMjflxVapyYhK_W8WOQrtHifGUulHNUFfa_XBxJ2rNZVj4TXB2uxkgg/exec';
+
+// Set to true to use hardcoded sample data (offline/dev mode)
+// Set to false once your Web App is deployed
+const OFFLINE_MODE = false;
+
+// ── State ──────────────────────────────────────────────────────
+let activeTab    = 'today';
+let wtdPeriod    = 'wtd';
+let cachedData   = {};    // cache by cacheKey
+let localRemarks = [];    // remarks added this session (before reload)
+Chart.register(ChartDataLabels);
+const CHARTS = {};
+
+// ── BU config ──────────────────────────────────────────────────
+const BU_CFG = [
+  {key:'Self Warehouse', color:'#1D9E75'},
+  {key:'Dark Store',     color:'#7F77DD'},
+  {key:'3PL B2C',        color:'#378ADD'},
+  {key:'3PL B2B',        color:'#888780'},
+  {key:'Unknown',        color:'#B4B2A9'}
+];
+const BU_FAC   = {'Self Warehouse':4,'Dark Store':5,'3PL B2C':12,'3PL B2B':1,'Unknown':1};
+const BU_BADGE = {'3PL B2B':'b-b2b','3PL B2C':'b-b2c','Dark Store':'b-ds','Self Warehouse':'b-sw','Unknown':'b-unk'};
+const BRANDS   = ['Little Joy','Be Bodywise','Man Matters','OWN'];
+const BFILL    = {'Little Joy':'#B5D4F4','Be Bodywise':'#9FE1CB','Man Matters':'#FAC775','OWN':'#D3D1C7'};
+const BBORDER  = {'Little Joy':'#378ADD','Be Bodywise':'#1D9E75','Man Matters':'#BA7517','OWN':'#888780'};
+
+// ══════════════════════════════════════════════════════════════
+//  API LAYER — uses JSONP to bypass CORS
+//  Google Apps Script blocks fetch() from external origins.
+//  JSONP injects a <script> tag instead — no CORS headers needed.
+// ══════════════════════════════════════════════════════════════
+
+// JSONP helper — injects a script tag, resolves when callback fires
+function jsonpFetch(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer  = setTimeout(() => {
+      cleanup();
+      reject(new Error('JSONP timeout — Apps Script did not respond in 15s'));
+    }, 15000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = function(data) {
+      cleanup();
+      if (data && data.ok === false) reject(new Error(data.error || 'API error'));
+      else resolve(data && data.data !== undefined ? data.data : data);
+    };
+
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = () => { cleanup(); reject(new Error('JSONP script load failed')); };
+    document.head.appendChild(script);
+  });
+}
+
+async function apiFetch(params) {
+  if (OFFLINE_MODE) return offlineData(params);
+  const url = WEBAPP_URL + '?' + new URLSearchParams(params).toString();
+  return jsonpFetch(url);
+}
+
+async function apiPost(body) {
+  if (OFFLINE_MODE) {
+    localRemarks.unshift({
+      submittedAt: new Date().toLocaleString('en-IN'),
+      name:        body.name,
+      facility:    body.facility || '',
+      tags:        Array.isArray(body.tags) ? body.tags.join(', ') : '',
+      remark:      body.remarkText,
+      dateRef:     new Date().toLocaleDateString('en-IN')
+    });
+    return { success: true };
+  }
+  // POST via JSONP (encode body as query params since JSONP is GET-only)
+  const params = { ...body, action: body.action };
+  return jsonpFetch(WEBAPP_URL + '?' + new URLSearchParams(params).toString());
+}
+
+// ══════════════════════════════════════════════════════════════
+//  OFFLINE / SAMPLE DATA
+//  Used when OFFLINE_MODE = true or no Web App URL set
+// ══════════════════════════════════════════════════════════════
+function offlineData(params) {
+  const {action, period} = params;
+  if (action === 'ping') return {status:'offline-demo',ts:new Date().toLocaleString()};
+  if (action === 'prohibited') return SAMPLE_PROHIBITED;
+  if (action === 'remarks')    return localRemarks.concat(SAMPLE_REMARKS);
+  if (action === 'summary')    return buildSampleSummary(period || 'today');
+  return {};
+}
+
+function buildSampleSummary(period) {
+  const allDates = ['2026-06-01','2026-06-02','2026-06-03','2026-06-04','2026-06-05'];
+  const dates    = period === 'today' ? ['2026-06-05'] : allDates;
+
+  const DAILY_FULL = {
+    '2026-06-01':{add:525,remove:525},
+    '2026-06-02':{add:9111,remove:9111},
+    '2026-06-03':{add:87582,remove:85362},
+    '2026-06-04':{add:10887,remove:10668},
+    '2026-06-05':{add:1310,remove:1310}
+  };
+  const BRAND_FULL = {
+    '2026-06-01':{'Be Bodywise':882,'Man Matters':168,'Little Joy':0,'OWN':0},
+    '2026-06-02':{'Be Bodywise':8484,'Man Matters':2358,'Little Joy':7380,'OWN':0},
+    '2026-06-03':{'Be Bodywise':43721,'Man Matters':38903,'Little Joy':90320,'OWN':0},
+    '2026-06-04':{'Be Bodywise':5256,'Man Matters':423,'Little Joy':14844,'OWN':1032},
+    '2026-06-05':{'Be Bodywise':146,'Man Matters':0,'Little Joy':2474,'OWN':0}
+  };
+  const BU_FULL_WTD = {'Self Warehouse':42248,'Dark Store':131149,'3PL B2C':40570,'3PL B2B':1392,'Unknown':1032};
+  const BU_TODAY    = {'Self Warehouse':2474,'3PL B2C':75};
+
+  const daily = dates.map(d => ({
+    date:d, label:_dateLabel(d),
+    add:DAILY_FULL[d]?.add||0, remove:DAILY_FULL[d]?.remove||0
+  }));
+
+  const brandDaily = [];
+  dates.forEach(d => {
+    BRANDS.forEach(b => {
+      const qty = BRAND_FULL[d]?.[b]||0;
+      if (qty > 0) brandDaily.push({date:d, label:_dateLabel(d), brand:b, qty});
+    });
+  });
+
+  const totalAdd = daily.reduce((s,r)=>s+r.add,0);
+  const totalRem = daily.reduce((s,r)=>s+r.remove,0);
+  const buMap    = period==='today' ? BU_TODAY : BU_FULL_WTD;
+  const buTotals = Object.keys(buMap).map(k=>({bu:k,qty:buMap[k]})).sort((a,b)=>b.qty-a.qty);
+
+  const FAC_ROWS = [
+    {facility:'MH_PND_DELHI',bu:'Dark Store',add:66729,rem:64288,gAdd:63843,gRem:58556,bAdd:2886,bRem:5732,txns:5939},
+    {facility:'SL Mother Hub',bu:'Self Warehouse',add:21124,rem:21124,gAdd:19611,gRem:19804,bAdd:375,bRem:182,txns:743},
+    {facility:'MM Beyond NCR',bu:'3PL B2C',add:16289,rem:16289,gAdd:16289,gRem:0,bAdd:0,bRem:16289,txns:26},
+    {facility:'BW Ahmedabad',bu:'3PL B2C',add:1284,rem:1284,gAdd:1284,gRem:0,bAdd:0,bRem:1284,txns:4},
+    {facility:'MP Beyond NCR',bu:'3PL B2C',add:1518,rem:1518,gAdd:1518,gRem:0,bAdd:0,bRem:1518,txns:33},
+    {facility:'BLR B2B Offline',bu:'3PL B2B',add:696,rem:696,gAdd:696,gRem:696,bAdd:0,bRem:0,txns:12},
+    {facility:'SL Ambient',bu:'Self Warehouse',add:1138,rem:1138,gAdd:1138,gRem:1131,bAdd:0,bRem:7,txns:6},
+    {facility:'BW Beyond NCR',bu:'3PL B2C',add:532,rem:532,gAdd:532,gRem:532,bAdd:0,bRem:0,txns:18},
+    {facility:'BW Kolkata',bu:'3PL B2C',add:192,rem:192,gAdd:192,gRem:0,bAdd:0,bRem:192,txns:2},
+  ];
+  const facRows = (period === 'today')
+    ? [{facility:'SL Mother Hub',bu:'Self Warehouse',add:1237,rem:1237,gAdd:1237,gRem:1237,bAdd:0,bRem:0,txns:24},
+       {facility:'BW Beyond NCR',bu:'3PL B2C',add:73,rem:73,gAdd:73,gRem:73,bAdd:0,bRem:0,txns:2},
+       {facility:'BW EMIZA BLR',bu:'3PL B2C',add:0,rem:2,gAdd:0,gRem:0,bAdd:0,bRem:2,txns:2}]
+    : FAC_ROWS;
+
+  return {
+    period,
+    generatedAt: new Date().toLocaleString('en-IN'),
+    metrics: {
+      addQty:totalAdd, remQty:totalRem, net:totalAdd-totalRem,
+      goodAdd:period==='today'?1310:106154,
+      badAdd:period==='today'?0:3261,
+      goodRemove:period==='today'?1310:80703,
+      badRemove:period==='today'?0:26273,
+      facilities:period==='today'?3:22, totalRows:period==='today'?28:6798
+    },
+    daily, brandDaily, buTotals, facilityRows:facRows,
+    invBreakdown:{
+      gAdd:period==='today'?1310:106154, gRem:period==='today'?1310:80703,
+      bAdd:period==='today'?0:3261,     bRem:period==='today'?0:26273
+    }
+  };
+}
+
+const SAMPLE_PROHIBITED = [
+  {importedAt:'05-06-2026 15:30:00 IST',emailDate:'05-06-2026',facility:'LJ_ER_Rahatani',
+   businessUnit:'Self Warehouse',brand:'Little Joy',skuCode:'MWLJSKS.0001.B0_N',
+   itemName:'LJ Neem Body wash 30ml (Mini)',batch:'BA024736',invType:'GOOD_INVENTORY',
+   quantity:10,oldQty:10,created:'01-06-2026 14:59',username:'ops.user@mosaicwellness.in',
+   remarks:'Inventory of sku replaced forcefully i.e ignoring pendency',reviewStatus:'PENDING REVIEW'},
+  {importedAt:'05-06-2026 15:30:00 IST',emailDate:'05-06-2026',facility:'LJ_ER_Rahatani',
+   businessUnit:'Self Warehouse',brand:'Little Joy',skuCode:'MWLJSKS.0001.B0_N',
+   itemName:'LJ Neem Body wash 30ml (Mini)',batch:'BA024736',invType:'GOOD_INVENTORY',
+   quantity:9,oldQty:9,created:'01-06-2026 15:14',username:'ops.user@mosaicwellness.in',
+   remarks:'Inventory of sku replaced forcefully i.e ignoring pendency',reviewStatus:'PENDING REVIEW'}
+];
+const SAMPLE_REMARKS = [];
+
+// ══════════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ══════════════════════════════════════════════════════════════
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  activeTab = id;
+  loadTab(id);
+}
+
+async function loadTab(id) {
+  if      (id === 'today')      await loadToday();
+  else if (id === 'wtd')        await loadWTD();
+  else if (id === 'remarks')    await loadRemarks();
+  else if (id === 'prohibited') await loadProhibited();
+}
+
+function setWTDPeriod(p, btn) {
+  wtdPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadWTD();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DATA LOADERS
+// ══════════════════════════════════════════════════════════════
+async function loadToday() {
+  const el = document.getElementById('today-content');
+  const p  = { action:'summary', period:'today',
+               bu:_fv('f-bu-t'), brand:_fv('f-brand-t'), inv:_fv('f-inv-t') };
+  try {
+    el.innerHTML = _loadingHTML("Loading today's data...");
+    const data = await apiFetch(p);
+    document.getElementById('today-label').textContent =
+      data.generatedAt ? data.generatedAt.split(' ').slice(0,1).join(' ') : 'today';
+    el.innerHTML = buildSummaryHTML('today', data);
+    renderCharts('today', data);
+    setStatus('live', 'Live data · ' + (data.generatedAt || ''));
+  } catch(e) { showError(el, e); }
+}
+
+async function loadWTD() {
+  const el = document.getElementById('wtd-content');
+  const p  = { action:'summary', period:wtdPeriod,
+               bu:_fv('f-bu-w'), brand:_fv('f-brand-w'), inv:_fv('f-inv-w') };
+  try {
+    el.innerHTML = _loadingHTML('Loading ' + wtdPeriod.toUpperCase() + ' data...');
+    const data = await apiFetch(p);
+    el.innerHTML = buildSummaryHTML(wtdPeriod, data);
+    renderCharts(wtdPeriod, data);
+    setStatus('live', 'Live data · ' + (data.generatedAt || ''));
+  } catch(e) { showError(el, e); }
+}
+
+async function loadRemarks() {
+  try {
+    const data = await apiFetch({ action:'remarks' });
+    renderRemarks(data);
+  } catch(e) {
+    renderRemarks(localRemarks);
+  }
+}
+
+async function loadProhibited() {
+  const el = document.getElementById('prohibited-content');
+  try {
+    el.innerHTML = _loadingHTML('Loading prohibited cases...');
+    const data = await apiFetch({ action:'prohibited' });
+    document.getElementById('proh-count').textContent = data.length || 0;
+    el.innerHTML = renderProhibited(data);
+  } catch(e) { showError(el, e); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HTML BUILDERS
+// ══════════════════════════════════════════════════════════════
+function buildSummaryHTML(period, d) {
+  const m = d.metrics || {};
+  const net = (m.net || 0);
+  const cards = [
+    {l:'Total add qty',    v:_fmtN(m.addQty),    s:'Units added',         cls:'cv-teal'},
+    {l:'Total remove qty', v:_fmtN(m.remQty),    s:'Units removed',       cls:'cv-red'},
+    {l:'Net movement',     v:(net>=0?'+':'')+_fmtN(net), s:'Add − Remove', cls:net>=0?'cv-teal':'cv-red'},
+    {l:'Good inventory add',v:_fmtN(m.goodAdd),  s:'GOOD_INVENTORY',      cls:'cv-blue'},
+    {l:'Bad inventory add', v:_fmtN(m.badAdd),   s:'BAD_INVENTORY',       cls:'cv-amber'},
+    {l:'Active facilities', v:m.facilities||0,   s:'In period',           cls:'cv-purple'},
+  ];
+
+  const metricsHTML = `
+    <div class="divider-label">Summary</div>
+    <div class="metric-grid section">
+      ${cards.map(c=>`<div class="metric-card">
+        <div class="m-label">${c.l}</div>
+        <div class="m-val ${c.cls}">${c.v}</div>
+        <div class="m-sub">${c.s}</div>
+      </div>`).join('')}
+    </div>`;
+
+  const chartPrefix = period === 'today' ? 'tod' : 'wtd';
+  const chartsHTML = `
+    <div class="divider-label">Day-on-day movement</div>
+    <div class="two-col section">
+      <div class="chart-card">
+        <h3>Quantity adjusted by date</h3>
+        <div class="chart-sub">Add vs Remove units per day</div>
+        <div class="legend">
+          <span><span class="leg-sq" style="background:#97C459"></span>Add</span>
+          <span><span class="leg-sq" style="background:#F09595"></span>Remove</span>
+        </div>
+        <div class="chart-wrap" style="height:190px">
+          <canvas id="c-${chartPrefix}-daily" role="img" aria-label="Add vs Remove by date"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>Brand contribution by date</h3>
+        <div class="chart-sub">Units per brand stacked by date</div>
+        <div class="legend">
+          <span><span class="leg-sq" style="background:#B5D4F4"></span>Little Joy</span>
+          <span><span class="leg-sq" style="background:#9FE1CB"></span>Be Bodywise</span>
+          <span><span class="leg-sq" style="background:#FAC775"></span>Man Matters</span>
+          <span><span class="leg-sq" style="background:#D3D1C7"></span>OWN</span>
+        </div>
+        <div class="chart-wrap" style="height:190px">
+          <canvas id="c-${chartPrefix}-brand" role="img" aria-label="Brand contribution by date"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="divider-label">Composition</div>
+    <div class="two-col section">
+      <div class="bu-card">
+        <h3>Quantity by business unit</h3>
+        <div class="chart-sub" style="font-size:10px;color:var(--c-text-3);margin-bottom:14px">
+          Total units (add + remove) proportional to bar width
+        </div>
+        <div id="bu-${chartPrefix}"></div>
+      </div>
+      <div class="chart-card">
+        <h3>Good vs bad inventory</h3>
+        <div class="chart-sub">Units by quality across add &amp; remove</div>
+        <div class="legend">
+          <span><span class="leg-sq" style="background:#97C459"></span>Good Add</span>
+          <span><span class="leg-sq" style="background:#9FE1CB"></span>Good Remove</span>
+          <span><span class="leg-sq" style="background:#FAC775"></span>Bad Add</span>
+          <span><span class="leg-sq" style="background:#F09595"></span>Bad Remove</span>
+        </div>
+        <div class="chart-wrap" style="height:190px">
+          <canvas id="c-${chartPrefix}-inv" role="img" aria-label="Good vs bad inventory"></canvas>
+        </div>
+      </div>
+    </div>`;
+
+  const facHTML = `
+    <div class="divider-label">Facility detail</div>
+    <div class="table-card section">
+      <div class="table-card-header">
+        <h3>Facility-wise batch adjustment</h3>
+        <div style="font-size:10px;color:var(--c-text-3);margin-top:2px">
+          Add &amp; Remove split by inventory type · sorted by total volume
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Facility</th><th>Business unit</th>
+            <th class="nr">Add qty</th><th class="nr">Remove qty</th><th class="nr">Net</th>
+            <th class="nr">Good add</th><th class="nr">Good remove</th>
+            <th class="nr">Bad add</th><th class="nr">Bad remove</th>
+            <th class="nr">Txns</th>
+          </tr></thead>
+          <tbody>
+            ${(d.facilityRows||[]).map(r => {
+              const net = r.add - r.rem;
+              return `<tr>
+                <td style="font-weight:500">${r.facility}</td>
+                <td><span class="badge ${BU_BADGE[r.bu]||'b-unk'}">${r.bu}</span></td>
+                <td class="nr"><span class="pill p-add">${_fmtN(r.add)}</span></td>
+                <td class="nr"><span class="pill p-rem">${_fmtN(r.rem)}</span></td>
+                <td class="nr ${net>=0?'p-pos':'p-neg'}">${net>=0?'+':''}${_fmtN(net)}</td>
+                <td class="nr" style="color:#3B6D11">${_fmtN(r.gAdd)}</td>
+                <td class="nr" style="color:#0F6E56">${_fmtN(r.gRem)}</td>
+                <td class="nr" style="color:#BA7517">${r.bAdd ? _fmtN(r.bAdd) : '-'}</td>
+                <td class="nr" style="color:#C62828">${r.bRem ? _fmtN(r.bRem) : '-'}</td>
+                <td class="nr" style="color:var(--c-text-3)">${_fmtN(r.txns)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  return metricsHTML + chartsHTML + facHTML;
+}
+
+function renderProhibited(cases) {
+  if (!cases || cases.length === 0) {
+    return '<div class="empty-state">✅ No prohibited (REPLACE) transactions found in this period.</div>';
+  }
+  return cases.map((c, i) => `
+    <div class="proh-card">
+      <div class="proh-header">
+        <span style="font-size:18px">⚠</span>
+        <span class="proh-title">Case ${i+1} of ${cases.length} · ${c.created || c.importedAt}</span>
+        <span class="badge b-${(c.reviewStatus||'').toLowerCase().includes('pending')?'ds':'b2c'}"
+              style="margin-left:auto;font-size:10px">${c.reviewStatus||'PENDING'}</span>
+      </div>
+      <div class="proh-grid">
+        <div><div class="proh-field-label">Facility</div><div class="proh-field-val">${c.facility}</div></div>
+        <div><div class="proh-field-label">Business unit</div><div class="proh-field-val">
+          <span class="badge ${BU_BADGE[c.businessUnit]||'b-unk'}">${c.businessUnit}</span></div></div>
+        <div><div class="proh-field-label">Brand</div><div class="proh-field-val">${c.brand}</div></div>
+        <div><div class="proh-field-label">SKU code</div><div class="proh-field-val">${c.skuCode}</div></div>
+        <div><div class="proh-field-label">Item name</div><div class="proh-field-val">${c.itemName}</div></div>
+        <div><div class="proh-field-label">Batch</div><div class="proh-field-val">${c.batch}</div></div>
+        <div><div class="proh-field-label">Quantity</div>
+          <div class="proh-field-val" style="color:var(--c-red);font-weight:700">${c.quantity} units</div></div>
+        <div><div class="proh-field-label">Inventory type</div><div class="proh-field-val">${c.invType}</div></div>
+        <div><div class="proh-field-label">Operator</div><div class="proh-field-val">${c.username||'—'}</div></div>
+      </div>
+      <div class="proh-remarks">${c.remarks}</div>
+    </div>`).join('') +
+    `<div style="background:var(--c-bg);border-radius:var(--radius-md);padding:12px 14px;
+       font-size:11px;color:var(--c-text-2);border:1px solid var(--c-border);display:flex;gap:8px">
+      <span style="flex-shrink:0">ℹ️</span>
+      <span>REPLACE transactions bypass WMS pendency. Review with warehouse ops and update
+      the Review Status column in <strong>NI_Prohibited</strong> once investigated.</span>
+    </div>`;
+}
+
+function renderRemarks(data) {
+  const count = (data||[]).length;
+  document.getElementById('remark-count').textContent = count + (count===1?' entry':' entries');
+  const el = document.getElementById('remark-list');
+  if (!count) {
+    el.innerHTML = '<div class="empty-state">📋 No remarks yet. Add the first one above.</div>';
+    return;
+  }
+  el.innerHTML = (data||[]).map(r => {
+    const initials = (r.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const tags     = (r.tags||'').split(',').filter(Boolean);
+    return `<div class="remark-item">
+      <div class="remark-avatar">${initials}</div>
+      <div style="flex:1">
+        <div class="remark-meta">
+          <span style="font-weight:600;color:var(--c-text)">${r.name||'—'}</span>
+          <span>${r.submittedAt||''}</span>
+          ${r.facility ? `<span>📍 ${r.facility}</span>` : ''}
+        </div>
+        <div class="remark-text">${r.remark||r.remarkText||''}</div>
+        ${tags.length ? `<div class="remark-tags">${tags.map(t=>`<span class="remark-tag">${t.trim()}</span>`).join('')}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CHART RENDERERS
+// ══════════════════════════════════════════════════════════════
+function dc(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
+function _barTop(col){return{anchor:'end',align:'end',color:col||'#5F5E5A',
+  font:{size:9,weight:'600'},formatter:v=>v>0?_fmtK(v):'',padding:{bottom:0}};}
+
+function renderCharts(period, d) {
+  const pfx = period === 'today' ? 'tod' : 'wtd';
+
+  // ── Daily ───────────────────────────────────────────────────
+  dc('c-'+pfx+'-daily');
+  const dCanvas = document.getElementById('c-'+pfx+'-daily');
+  if (dCanvas && d.daily) {
+    CHARTS['c-'+pfx+'-daily'] = new Chart(dCanvas, {
+      type:'bar',
+      data:{
+        labels: d.daily.map(r=>r.label),
+        datasets:[
+          {label:'Add',    data:d.daily.map(r=>r.add),
+           backgroundColor:'#C0DD97',borderColor:'#639922',borderWidth:1,borderRadius:3,
+           datalabels:_barTop('#3B6D11')},
+          {label:'Remove', data:d.daily.map(r=>r.remove),
+           backgroundColor:'#F7C1C1',borderColor:'#E24B4A',borderWidth:1,borderRadius:3,
+           datalabels:_barTop('#A32D2D')}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:22}},
+        plugins:{legend:{display:false},datalabels:{display:true}},
+        scales:{
+          x:{ticks:{font:{size:10},autoSkip:false,maxRotation:0},grid:{display:false}},
+          y:{ticks:{font:{size:10},callback:v=>_fmtK(v)},
+             grid:{color:'rgba(0,0,0,.04)'},
+             title:{display:true,text:'Units',font:{size:10},color:'#7A9589'}}
+        }}
+    });
+  }
+
+  // ── Brand ───────────────────────────────────────────────────
+  dc('c-'+pfx+'-brand');
+  const bCanvas = document.getElementById('c-'+pfx+'-brand');
+  if (bCanvas && d.brandDaily) {
+    // build per-date per-brand matrix
+    const dateSet = [...new Set(d.daily.map(r=>r.date))].sort();
+    const activeBrands = BRANDS.filter(b =>
+      d.brandDaily.some(r => r.brand === b && r.qty > 0));
+
+    CHARTS['c-'+pfx+'-brand'] = new Chart(bCanvas, {
+      type:'bar',
+      data:{
+        labels: dateSet.map(dd => _dateLabel(dd)),
+        datasets: activeBrands.map(b => ({
+          label: b,
+          data:  dateSet.map(dd => {
+            const found = d.brandDaily.find(r => r.date===dd && r.brand===b);
+            return found ? found.qty : 0;
+          }),
+          backgroundColor: BFILL[b], borderColor: BBORDER[b],
+          borderWidth:1, borderRadius:2,
+          maxBarThickness: activeBrands.length === 1 ? 40 : 60,
+          datalabels:{anchor:'center',align:'center',color:BBORDER[b],
+            font:{size:9,weight:'600'},formatter:v=>v>500?_fmtK(v):''}
+        }))
+      },
+      options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:4}},
+        plugins:{legend:{display:false},datalabels:{display:true}},
+        scales:{
+          x:{stacked:true,ticks:{font:{size:10},autoSkip:false,maxRotation:0},grid:{display:false}},
+          y:{stacked:true,ticks:{font:{size:10},callback:v=>_fmtK(v)},
+             grid:{color:'rgba(0,0,0,.04)'},
+             title:{display:true,text:'Units',font:{size:10},color:'#7A9589'}}
+        }}
+    });
+  }
+
+  // ── BU Impact bars ──────────────────────────────────────────
+  const buEl = document.getElementById('bu-'+pfx);
+  if (buEl && d.buTotals) {
+    const maxV = Math.max(...d.buTotals.map(r=>r.qty), 1);
+    buEl.innerHTML = d.buTotals.map(r => {
+      const cfg = BU_CFG.find(b=>b.key===r.bu) || {color:'#888780'};
+      const pct = Math.round(r.qty / maxV * 100);
+      return `<div class="bu-row">
+        <div class="bu-left">
+          <div class="bu-name">${r.bu}</div>
+          <div class="bu-fac">${BU_FAC[r.bu]||1} fac</div>
+        </div>
+        <div class="bu-bar-wrap">
+          <div class="bu-bar" style="width:${pct}%;background:${cfg.color}"></div>
+        </div>
+        <div class="bu-right">
+          <div class="bu-val" style="color:${cfg.color}">${_fmtL(r.qty)}</div>
+          <div class="bu-units">${_fmtU(r.qty)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Good vs Bad ─────────────────────────────────────────────
+  dc('c-'+pfx+'-inv');
+  const invCanvas = document.getElementById('c-'+pfx+'-inv');
+  if (invCanvas && d.invBreakdown) {
+    const {gAdd,gRem,bAdd,bRem} = d.invBreakdown;
+    CHARTS['c-'+pfx+'-inv'] = new Chart(invCanvas, {
+      type:'bar',
+      data:{
+        labels:['Good · Add','Good · Remove','Bad · Add','Bad · Remove'],
+        datasets:[{
+          data:[gAdd,gRem,bAdd,bRem],
+          backgroundColor:['#C0DD97','#9FE1CB','#FAC775','#F7C1C1'],
+          borderColor:['#639922','#1D9E75','#BA7517','#E24B4A'],
+          borderWidth:1, borderRadius:3,
+          datalabels:{anchor:'end',align:'right',
+            color:['#3B6D11','#0F6E56','#854F0B','#A32D2D'],
+            font:{size:9,weight:'600'},formatter:v=>v>0?_fmtK(v):''}
+        }]
+      },
+      options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+        layout:{padding:{right:38}},
+        plugins:{legend:{display:false},datalabels:{display:true}},
+        scales:{
+          x:{ticks:{font:{size:10},callback:v=>_fmtK(v)},grid:{color:'rgba(0,0,0,.04)'},
+             title:{display:true,text:'Units',font:{size:10},color:'#7A9589'}},
+          y:{ticks:{font:{size:10}},grid:{display:false}}
+        }}
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  REMARKS FORM
+// ══════════════════════════════════════════════════════════════
+function toggleRemarkForm() {
+  const f = document.getElementById('remark-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+function toggleTag(el) { el.classList.toggle('selected'); }
+
+async function submitRemark() {
+  const name = document.getElementById('r-name').value.trim();
+  const text = document.getElementById('r-text').value.trim();
+  if (!name || !text) { alert('Please enter your name and remark.'); return; }
+  const fac  = document.getElementById('r-facility').value;
+  const tags = [...document.querySelectorAll('.tag-chip.selected')].map(t => t.textContent);
+
+  const btn = document.querySelector('.btn-save');
+  btn.textContent = 'Saving...'; btn.disabled = true;
+
+  try {
+    await apiPost({ action:'saveRemark', name, facility:fac, tags, remarkText:text });
+    document.getElementById('r-name').value  = '';
+    document.getElementById('r-text').value  = '';
+    document.getElementById('r-facility').value = '';
+    document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('selected'));
+    toggleRemarkForm();
+    await loadRemarks();
+  } catch(e) {
+    alert('Error saving remark: ' + e.message);
+  } finally {
+    btn.textContent = 'Save remark'; btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  GLOBAL ACTIONS
+// ══════════════════════════════════════════════════════════════
+async function refreshAll(btn) {
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;animation:spin .7s linear infinite"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Refreshing...';
+  btn.disabled = true;
+  cachedData = {}; // clear cache
+  setStatus('loading', 'Refreshing...');
+  await loadTab(activeTab);
+  btn.innerHTML = orig; btn.disabled = false;
+}
+
+function downloadReport() {
+  // Build CSV from current summary data
+  const rows = [['Facility','Business Unit','Add Qty','Remove Qty','Net','Good Add','Good Remove','Bad Add','Bad Remove','Txns']];
+  document.querySelectorAll('#today-content tbody tr, #wtd-content tbody tr').forEach(tr => {
+    const cells = [...tr.querySelectorAll('td')].map(td => td.textContent.trim());
+    if (cells.length) rows.push(cells);
+  });
+  const csv  = rows.map(r => r.map(c => '"'+c+'"').join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'BatchAdjustment_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  STATUS BAR
+// ══════════════════════════════════════════════════════════════
+function setStatus(state, msg) {
+  const dot  = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  dot.className  = 'status-dot ' + state;
+  text.textContent = msg;
+  if (state === 'live') {
+    document.getElementById('last-updated').textContent =
+      'Updated ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+function showError(el, err) {
+  setStatus('error', 'Error loading data');
+  el.innerHTML = `<div style="padding:20px;color:var(--c-red);font-size:12px;
+    background:var(--c-red-lt);border-radius:var(--radius-md);border:1px solid #FFCDD2">
+    ⚠ ${err.message || 'Failed to load data.'}<br>
+    <span style="color:var(--c-text-3);font-size:11px;margin-top:4px;display:block">
+    Check that the Apps Script Web App is deployed and WEBAPP_URL is set correctly.</span>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════
+function _fv(id) { const el = document.getElementById(id); return el ? el.value : 'all'; }
+function _fmtK(v){ return v>=1000 ? (v/1000).toFixed(1)+'k' : String(v); }
+function _fmtN(v){ return (v||0).toLocaleString('en-IN'); }
+function _fmtL(v){
+  if(v>=100000) return '₹'+(v/100000).toFixed(2)+'L';
+  if(v>=1000)   return '₹'+(v/1000).toFixed(1)+'K';
+  return '₹'+v;
+}
+function _fmtU(v){ return v>=1000 ? (v/1000).toFixed(1)+'K units' : v+' units'; }
+function _dateLabel(iso) {
+  if(!iso||iso.length<10) return iso;
+  const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const p=iso.split('-'); return p[2]+' '+m[parseInt(p[1],10)-1];
+}
+function _loadingHTML(msg){
+  return `<div class="loading-state"><div class="spinner"></div>${msg}</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  // Show connection status on load
+  if (OFFLINE_MODE) {
+    setStatus('loading', 'Demo mode — showing sample data.');
+  } else {
+    setStatus('loading', 'Connecting to live Google Sheets data...');
+  }
+
+  // Load all tabs in parallel
+  await Promise.all([
+    loadToday(),
+    loadProhibited()
+  ]);
+
+  // Load remarks separately
+  loadRemarks();
+});
+</script>
+</body>
+</html>
